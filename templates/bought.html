@@ -1,0 +1,38 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Portfolio
+{% endblock %}
+
+{% block main %}
+    <p class="banner">
+        Bought!
+    </p>
+    <table class="table table-hover">
+            <thead class="thead-light">
+            <tr>
+                <th>Symbol</th>
+                <th>Name</th>
+                <th>Shares</th>
+                <th>Price</th>
+                <th>Total</th>
+            </tr>
+            </thead>
+            <tbody>
+               <tr>
+                   <td>{{ symbol }}</td>
+                   <td>{{ name }}</td>
+                   <td>{{ shares }}</td>
+                   <td>{{ price | usd }}</td>
+                   <td>{{ total | usd }}</td>
+               </tr>
+               <tr>
+                   <td></td>
+                   <td></td>
+                   <td></td>
+                   <td></td>
+                   <td>{{ balance | usd }}</td>
+               </tr>
+            </tbody>
+    </table>
+{% endblock %}

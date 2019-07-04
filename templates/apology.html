@@ -1,0 +1,9 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Apology
+{% endblock %}
+
+{% block main %}
+    <img alt="{{ top }}" width="400" height="500" class="border" src="http://memegen.link/custom/{{ top | urlencode }}/{{ bottom | urlencode }}.jpg?alt=https://cdn1.iconfinder.com/data/icons/ghost-face-1/600/82136_Angry_annoyed_sad_emoji_emoticon_smiley_ghost-512.png" title="{{ top }}">
+{% endblock %}
