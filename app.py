@@ -1,13 +1,21 @@
 import os
 
-from cs50 import SQL
 from flask import Flask, flash, jsonify, redirect, render_template, request, session
 from flask_session import Session
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import scoped_session, sessionmaker
 from tempfile import mkdtemp
 from time import strftime
 from werkzeug.exceptions import default_exceptions, HTTPException, InternalServerError
 from werkzeug.security import check_password_hash, generate_password_hash
 from helpers import apology, login_required, lookup, usd
+
+
+engine = create_engine(
+    "postgres://nfesclha:ILwMGNW3E0JSYhPOTsSVDfG-sFdjVCVT@motty.db.elephantsql.com:5432/nfesclha")
+db = scoped_session(sessionmaker(bind=engine))
+
 
 # Configure application
 app = Flask(__name__)
@@ -35,8 +43,7 @@ app.config["SESSION_PERMANENT"] = False
 app.config["SESSION_TYPE"] = "filesystem"
 Session(app)
 
-# Configure CS50 Library to use SQLite database
-db = SQL("sqlite:///finance.db")
+# Configure CS50 Library to use postgres database
 
 
 @app.route("/")
@@ -60,24 +67,26 @@ def buy():
             if count.isdigit():
                 price = share["price"]
                 total = float(price)*float(count)
-
-                result = db.execute("SELECT * FROM users WHERE id = :user_id", user_id=session["user_id"])
+                sql = text("SELECT * FROM users WHERE id = :user_id")
+                result = db.execute(
+                    sql, {'user_id':session["user_id"]}).fetchall()
                 if result[0]["cash"] > total:
                     cur_time = strftime("%m/%d/%Y %H:%M")
 
-                    db.execute("INSERT INTO portfolio VALUES(:symbol,:name,:shares,:price,:total,:user_id,:cur_time)", symbol=share["symbol"], name=share["name"],
-                               shares=count, price=price, total=total, user_id=session["user_id"], cur_time=cur_time)
-
+                    db.execute(text("INSERT INTO portfolio VALUES(:symbol,:name,:shares,:price,:total,:user_id,:cur_time)"), {'symbol':share["symbol"], 'name':share["name"],
+                               'shares':count, 'price':price, 'total':total, 'user_id':session["user_id"], 'cur_time':cur_time})
+                    db.commit()
                     balance = result[0]["cash"] - float(total)
-                    db.execute("UPDATE users SET  cash=:balance WHERE id = :user_id", balance=balance, user_id=session["user_id"])
-
+                    db.execute(text("UPDATE users SET  cash=:balance WHERE id = :user_id"),
+                               {'balance':balance, 'user_id':session["user_id"]})
+                    db.commit()
                     return render_template("bought.html", symbol=share["symbol"], name=share["name"], shares=count, price=float(price),
-                    total=float(total),balance=balance)
+                                           total=float(total), balance=balance)
 
                 else:
                     return apology("INSUFFICIENT CASH", 400)
             else:
-                return apology("valid shares please",400)
+                return apology("valid shares please", 400)
         else:
             return apology("Com'on! There is no such company", 400)
     else:
@@ -88,8 +97,9 @@ def buy():
 def check():
     """Return true if username available, else false, in JSON format"""
     username = request.args.get("username")
-    ans = db.execute("SELECT * FROM users WHERE username = :username", username=username)
-    if len(ans) > 0 :
+    ans = db.execute(
+        text("SELECT * FROM users WHERE username = :username"), {'username':username}).fetchall()
+    if len(ans) > 0:
         return jsonify(False)
     else:
         return jsonify(True)
@@ -99,8 +109,10 @@ def check():
 @login_required
 def history():
     """Show history of transactions"""
-    result = db.execute("SELECT * FROM users WHERE id = :user_id", user_id=session["user_id"])
-    data = db.execute("SELECT * FROM portfolio WHERE user_id = :user_id", user_id=session["user_id"])
+    result = db.execute(
+        text("SELECT * FROM users WHERE id = :user_id"), {'user_id':session["user_id"]}).fetchall()
+    data = db.execute(
+        text("SELECT * FROM portfolio WHERE user_id = :user_id"), {'user_id':session["user_id"]}).fetchall()
     return render_template("history.html", data=data, balance=usd(result[0]["cash"]))
 
 
@@ -123,8 +135,8 @@ def login():
             return apology("must provide password", 403)
 
         # Query database for username
-        rows = db.execute("SELECT * FROM users WHERE username = :username",
-                          username=request.form.get("username"))
+        rows = db.execute(text("SELECT * FROM users WHERE username = :username"),
+                          {'username':request.form.get("username")}).fetchall()
 
         # Ensure username exists and password is correct
         if len(rows) != 1 or not check_password_hash(rows[0]["hash"], request.form.get("password")):
@@ -138,6 +150,8 @@ def login():
 
     # User reached route via GET (as by clicking a link or via redirect)
     else:
+        x = db.execute(text('SELECT * FROM users')).fetchall()
+        print(x)
         return render_template("login.html")
 
 
@@ -186,14 +200,14 @@ def register():
             return apology("Passwords should match")
         password = generate_password_hash(request.form.get("password"))
 
-        result = db.execute("INSERT INTO users (username,hash) VALUES(:username,:hash)",
-                            username=request.form.get("username"), hash=password)
-
+        result = db.execute(text("INSERT INTO users (username,hash) VALUES(:username,:hash)"),
+                            {'username':request.form.get("username"), 'hash':password})
+        db.commit()
         if not result:
             return apology("Username already exists", 400)
 
-        rows = db.execute("SELECT * FROM users WHERE username = :username",
-                          username=request.form.get("username"))
+        rows = db.execute(text("SELECT * FROM users WHERE username = :username"),
+                          {'username':request.form.get("username")}).fetchall()
 
         session["user_id"] = rows[0]["id"]
 
@@ -211,14 +225,14 @@ def sell():
         if not request.form.get("symbol"):
             return apology("Share Not Selected")
         if not request.form.get("shares"):
-            return apology("Invalid Shares",400)
+            return apology("Invalid Shares", 400)
 
         comp = request.form.get("symbol")
         count = request.form.get("shares")
 
         if count.isdigit():
-            data = db.execute("SELECT * FROM portfolio WHERE symbol LIKE :symbol AND user_id = :user_id",
-                              user_id=session["user_id"], symbol=comp)
+            data = db.execute(text("SELECT * FROM portfolio WHERE symbol LIKE :symbol AND user_id = :user_id"),
+                              {'user_id':session["user_id"], 'symbol':comp}).fetchall()
             owned = 0
             for d in data:
                 owned = owned + d["shares"]
@@ -227,24 +241,27 @@ def sell():
                 price = lookup(comp)["price"]
                 total = float(count)*float(price)
 
-                result = db.execute("SELECT * FROM users WHERE id = :user_id", user_id=session["user_id"])
-                balance = result[0]["cash"] + total
+                result = db.execute(
+                    text("SELECT * FROM users WHERE id = :user_id"), {'user_id':session["user_id"]}).fetchall()
+                balance = float(result[0]["cash"]) + total
 
                 cur_time = strftime("%m/%d/%Y %H:%M")
 
-                db.execute("UPDATE users SET  cash=:balance WHERE id = :user_id", balance=balance, user_id=session["user_id"])
-
-                db.execute("INSERT INTO portfolio VALUES(:symbol,:name,:shares,:price,:total,:user_id,:cur_time)", symbol=lookup(comp)["symbol"], name=lookup(comp)["name"],
-                           shares=0-int(count), price=price, total=total, user_id=session["user_id"], cur_time=cur_time)
-
+                db.execute(text("UPDATE users SET  cash=:balance WHERE id = :user_id"),
+                           {'balance':balance, 'user_id':session["user_id"]})
+                db.commit()
+                db.execute(text("INSERT INTO portfolio VALUES(:symbol,:name,:shares,:price,:total,:user_id,:cur_time)"), {'symbol':lookup(comp)["symbol"], 'name':lookup(comp)["name"],
+                           'shares':0-int(count), 'price':price, 'total':total, 'user_id':session["user_id"], 'cur_time':cur_time})
+                db.commit()
                 return render_template("sold.html", symbol=comp, name=lookup(comp)["name"], shares=count, price=float(price),
-                total=float(total),balance=float(balance))
+                                       total=float(total), balance=float(balance))
             else:
                 return apology("You Do Not have that many shares!!", 400)
         else:
-            return apology("Invalid Shares",400)
+            return apology("Invalid Shares", 400)
     else:
-        options = db.execute("SELECT * FROM portfolio WHERE user_id = :user_id", user_id=session["user_id"])
+        options = db.execute(
+            text("SELECT * FROM portfolio WHERE user_id = :user_id"), {'user_id':session["user_id"]}).fetchall()
         shares = []
         for i in range(len(options)):
             shares.append(options[i]["symbol"])

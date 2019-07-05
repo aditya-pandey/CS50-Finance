@@ -18,24 +18,4 @@
         </div>
         <button class="btn btn-primary" type="submit">Register</button>
     </form>
-    <script>
-        $(document).ready(function() {
-           var username = document.querySelector("#username");
-           var form =document.querySelector("form");
-           form.onsubmit = function(answer){
-           $.get("/check?username=" + username.value, function(){
-                if(answer == true){
-                    form.submit();
-                }
-                else{
-                    alert("Username Taken");
-                    form.addEventListener("submit",function(e){
-                        e.preventDefault();
-                    });
-                }
-            });
-            }
-
-        });
-    </script>
 {% endblock %}
