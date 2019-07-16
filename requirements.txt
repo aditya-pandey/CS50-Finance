@@ -3,3 +3,4 @@ Flask
 Flask-Session
 requests
 gunicorn==19.9.0
+Flask-SQLAlchemy==2.4.0
