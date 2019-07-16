@@ -1,1 +1,1 @@
-web: gunicorn -b :$PORT app:app
+web: gunicorn finansic.wsgi --logs-fie -
