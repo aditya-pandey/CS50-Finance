@@ -1,1 +1,1 @@
-web: gunicorn finansic.wsgi --logs-fie -
+web: gunicorn app:app
